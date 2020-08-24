@@ -2,10 +2,10 @@ const express = require("express");
 const {check, validationResult} = require("express-validator/check");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const conf = require('../conf')
 const router = express.Router();
 
 const User = require("../model/User");
-const auth = require("../middleware/auth")
 
 router.post(
     "/signup", [
@@ -15,7 +15,7 @@ router.post(
             min:6
         })
     ],
-    async(req,res) => {
+    async(req,res) =>{
         const errors = validationResult(req);
         if(!errors.isEmpty()){
             return res.status(401).json({
@@ -42,14 +42,16 @@ router.post(
 
             const payload = {
                 user:{
-                    id:user.id
+                    id:user.id,
+                    name:user.username,
+                    email:email
                 }
             }
-            jwt.sign(payload,"randomSting",{expiresIn:10000},
+            jwt.sign(payload,conf.secret,{expiresIn:86400},
             (err,token) => {
                 if(err) throw err;
                 res.status(200).json({
-                    token
+                    token,email,username,password
                 })
             })
         }
@@ -112,14 +114,20 @@ router.post(
     }
 )
 
-router.get("/me",auth,async(req,res) => {
-    try{
-        const user = await User.findById(req.user.id);
-        res.json(user);
-    }
-    catch(err){
-        res.send({message:"error in fetching user"});
-    }
+router.get("/me",function(req,res){
+    var token= req.headers['x-access-token'];
+    if(!token)
+        return res.status(401).send({
+            auth:false,message:'No token provided.'
+        })
+    jwt.verify(token,conf.secret,function(err,decoded){
+        if(err)
+            return res.status(500).send({
+                auth:false,message:'Failed to authenticate token.'
+            })
+        res.status(200).send(decoded)
+    })
+    
 })
 
 module.exports = router;
